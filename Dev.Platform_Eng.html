@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+</head>
+<body onload="init()">
+<p><strong>Custom (log):</strong><p>
+<p id = 'location'></p><br>
+<p id = 'log'></p>
+<p id = 'userlog'></p>
+<p><strong>Controls:</strong><p>
+<p id = "controls">
+W-A-S-D: "move" user controlled entities;<br>
+Dir. Arrows (left, right): "change facing";<br>
+Spacebar: "attack";<br>
+Shift: "shift formation" user controlled <i>anchor</i> entities;
+</p>
+<script>
+
+const FPS = 180;
+var collisionDetect;
+const gameObject = [
+    platform = new asset(0, 32, 64, "#7E3F31", 400, 200),
+    platform = new asset(0, 32, 64, "red", 480, 400) 
+];
+
+const gameComponent = [
+    enemy_Fr = new component(0.3, 120, 120, 500, 120),
+    /**/
+    enemy_Fr1 = new component(0.3, 120, 120, 800, 320),
+    enemy_Fr2 = new component(0.3, 120, 120, 800, 450),
+    enemy_Fr3 = new component(0.3, 120, 120, 800, 580)
+];
+
+/*const agroNPC = [
+    enemy_Fr = new agro_Component(0.3, 120, 120, 60, 580)
+];*/
+
+function init() {
+    //Items: "arrows" 
+    
+    gameObject[0]; //platform
+    gameObject[1]; //munition
+    
+    //agroNPC[0];
+    
+    munition = new component(0.3, 20, 5, "black", 0, 0);
+    //Units: "infantry"
+    
+    user_Fr = new component(0.3, 120, 120, 60, 60);
+    user_Skr = new component(0.3, 120, 120, 60, 200);
+    
+    
+    
+    
+    
+    //munition = new asset(0.3, 5, 10, "red", 0, 0); -- Bug-fix
+    //return gameObject;
+    //setInterval(window.requestAnimationFrame(gameArea.stop));
+    gameArea.start();
+}
+
+//window.requestAnimationFrame(updateGameArea);
+/*
+
+*/
+var gameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 1000;
+        this.canvas.height = 1000;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.frameNo = 0;
+        this.interval = setInterval(updateGameArea, FPS);
+        window.addEventListener('keydown', function (e) {
+            e.preventDefault();
+            gameArea.keys = (gameArea.keys || []);
+            gameArea.keys[e.keyCode] = (e.type == "keydown");
+        })
+
+        window.addEventListener('keyup', function (e) {
+            gameArea.keys[e.keyCode] = (e.type == "keydown");
+        })
+        
+        window.addEventListener('keyup', function (ex) {
+            ex.preventDefault();
+            gameArea.release = (gameArea.release || []);
+            gameArea.release[ex.keyCode] = (ex.type == "keyup");
+        })
+        
+    },
+    
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+    stop : function() {
+        clearInterval(this.interval);
+        
+    }
+}
+
+function asset(gravity, widthF, heightF, color, xF, yF) {
+
+    this.width = widthF;
+    this.height = heightF;
+    this.speed = 0;
+    this.speed_x = 0;
+    this.speed_y = 0;
+    this.x = xF;
+    this.y = yF;
+    this.color = color;
+    this.gravity = gravity;//0.01
+    this.rate_gravity = 0;
+    this.update = function(gameObject){
+        
+        for(i=0; i< gameObject.length; i++){
+            sqr = gameArea.context;
+            sqr.fillStyle = gameObject[i].color;
+            sqr.fillRect(gameObject[i].x, gameObject[i].y, gameObject[i].width, gameObject[i].height);   
+        }
+    }
+    
+    this.newPos = function() {
+        this.x += this.speed_x;
+        this.y += this.speed_y;
+    }
+    
+    this.newTrajectory = function() {
+        obj = gameArea.context;
+        obj.fillStyle = color;
+        obj.fillRect(this.x, this.y, this.width, this.height);
+        
+        this.rate_gravity += this.gravity;
+        this.x -= this.speed_x + this.rate_gravity;
+        this.y += this.speed_y;
+    }
+};
+
+function component(gravity, width, height, x, y) {
+    this.width = width;
+    this.height = height;
+    this.speed = 0;
+    this.speed_x = 0;
+    this.speed_y = 0;
+    this.x = x;
+    this.y = y;
+    this.gravity = gravity;
+    
+    var attack = false;
+    var shield_Up = false;
+    var shield_Down = false;
+    var withdraw = false;
+    
+    this.HP = 10;
+    this.ATK = 1;
+    this.DEF = 0.7;
+    
+    this.animate = function(source, ctrl, formation) {
+        this.source = source;
+        this.ctrl = ctrl;
+        this.formation = formation;
+        
+        var sprite = new Image();
+        sprite.src = source;
+        
+//Spritesheet dimensions 240x120 - #.of spites /per anim.
+        var s_Width = 240;
+        var s_Height = 120;
+        
+        var f_Width = s_Width/2;//<-- Adjust /per #.of frames 
+        var f_Height = s_Height;
+        
+        var currentFrame = 0;
+        var frameCount = 2;//<-- Adjust /per #.of frames
+        
+        var srcX;
+        var srcY;
+        
+        var ctx = gameArea.context;
+        function updateFrame(){
+            
+                currentFrame = ++ currentFrame % frameCount; 
+                srcX = currentFrame * 120;
+                srcY = 0;
+            
+                ctx.clearRect(x, y, f_Width, f_Height);
+                //gameArea.canvas.width, gameArea.canvas.height);
+                //var loc = document.getElementById("loc").innerHtml = 
+                //x + "," + y;
+                //context.font = "18px Courier New";
+                //context.fillText(loc, 15, 20);
+            
+        };
+
+        
+        function collision(gameObject) {
+            var detectBox_Left = x;
+            var detectBox_Right = x + (width);
+            var detectBox_Top = y;
+            var detectBox_Bottom = y + (height);
+            
+            for(i=0; i< gameObject.length; i++){
+                //gameObject.compile();
+                this.width = gameObject.widthF;
+                this.height = gameObject.heightF;
+                this.x = gameObject.xF;
+                this.y = gameObject.yF;
+                
+//Debugging:
+//document.getElementById("log").innerHTML = gameObject[i].width + "," + gameObject[i].height + "," + gameObject[i].x + "," + gameObject[i].y + "<br>";
+//document.getElementById("userlog").innerHTML = width + "," + height + "," + x + "," + y + "<br>";                
+                var collisionBox_Left = gameObject[i].x;
+                var collisionBox_Right = gameObject[i].x + (gameObject[i].width);
+                var collisionBox_Top = gameObject[i].y;
+                var collisionBox_Bottom = gameObject[i].y + (gameObject[i].height);
+    
+                var collisionDetect = true;
+            
+                if ((detectBox_Bottom < collisionBox_Top) || (detectBox_Top > collisionBox_Bottom) || (detectBox_Right < collisionBox_Left) || (detectBox_Left > collisionBox_Right)) {
+        
+                    collisionDetect = false;
+//Debugging:
+//document.getElementById("log").innerHTML += "No Collision(Detected):"
+                } else {
+                    var obj = gameObject[i];
+                    var distance = //Distance as function of *sqrt
+                    Math.sqrt((obj.x - x)*(obj.x- x) + (obj.y- y)*(obj.y - y));
+                    
+                    var vX = obj.x - x;//x*'vertex' of collision
+                    var vY = obj.y - y;//y*'vertex' of collision
+                    
+                    
+            /*        
+            x += vy_Normal; //Adjust 'terrain' friction 
+            y -= vx_Normal;
+            */
+            
+                    var vx_Normal = vX / distance;
+                    var vy_Normal = vY / distance;
+                    
+                    /*
+                    var vx_Normal = vX / 2*(Math.PI*(0.1 + distance));
+                    var vy_Normal = vY / 2*(Math.PI*(0.1 + distance));
+                    */
+                    
+                    //#_#; destroy entity!
+                    x -= vy_Normal; //Adjust 'terrain' friction 
+                    y += vx_Normal;
+                    
+                    
+                    //Debugging:
+//document.getElementById("log").innerHTML += "Collision(Detected): " + distance + "," + vX + "," + vY + "<br> Normal: " + vx_Normal + "," + vy_Normal;
+                    
+                }
+            }
+            
+            return collisionDetect;
+        }
+        
+
+
+this.coll_detectObj = function(inst, obj){
+    let xP = inst.xPos();
+    let yP = inst.yPos();
+    let xF = obj.xPos();
+    let yF = obj.yPos();
+    
+    var detectBox_Left = xP;
+    var detectBox_Right = xP + (inst.width);
+    var detectBox_Top = yP;
+    var detectBox_Bottom = yP + (inst.height);
+    
+    var collisionBox_Left = xF;
+    var collisionBox_Right = xF + (obj.width);
+    var collisionBox_Top = yF;
+    var collisionBox_Bottom = yF + (obj.height);    
+            
+/*
+//gameObject.compile();
+        this.width = obj.width;
+        this.height = obj.height;
+        this.x = xF;
+        this.y = yF;*/
+                
+//Debugging:
+//document.getElementById("log").innerHTML = gameObject[i].width + "," + gameObject[i].height + "," + gameObject[i].x + "," + gameObject[i].y + "<br>";
+//document.getElementById("userlog").innerHTML = width + "," + height + "," + x + "," + y + "<br>";                
+        
+    
+        var collisionDetect = true;
+            
+        if ((detectBox_Bottom < collisionBox_Top) || (detectBox_Top > collisionBox_Bottom) || (detectBox_Right < collisionBox_Left) || (detectBox_Left > collisionBox_Right)) {
+        
+        collisionDetect = false;
+//Debugging:
+//document.getElementById("log").innerHTML = "No Collision(Detected):"
+        } else {
+            
+            var distance = //Distance as function of *sqrt
+            Math.sqrt((xF - xP)*(xF - xP) + (yF - yP)*(yF - yF));
+                    
+            var vX = xF - xP;//x*'vertex' of collision
+            var vY = yF - yP;//y*'vertex' of collision
+                        
+            //var vx_Normal = vX / 2*(Math.PI/distance);
+            //var vy_Normal = vY / 2*(Math.PI/distance);
+            var vx_Normal = vX / (15 + distance); //10px collision buffer;
+            var vy_Normal = vY / (15 + distance); 
+            
+            //x -= vy_Normal; //Adjust 'terrain' friction 
+            //y += vx_Normal;
+            
+            if (detectBox_Bottom > collisionBox_Top){
+                x -= vx_Normal; //Adjust 'terrain' friction 
+                y -= vy_Normal;
+            } else if (detectBox_Top < collisionBox_Bottom){
+                x += vx_Normal; //Adjust 'terrain' friction 
+                y += vy_Normal;
+            } else if (detectBox_Right < collisionBox_Left){
+                x -= vx_Normal; //Adjust 'terrain' friction 
+                y -= vx_Normal;
+            } else if (detectBox_Left > collisionBox_Right){
+                x += vx_Normal; //Adjust 'terrain' friction 
+                y += vx_Normal;
+            } else {
+                x -= vx_Normal;
+                y += vy_Normal;
+            }
+//Debugging:
+//document.getElementById("log").innerHTML = "Collision(Detected): " + distance + "," + vX + "," + vY + "<br> Normal: " + vx_Normal + "," + vy_Normal + "<br>Vertex:" + vX + "," + vY ;
+                    
+        }
+   //}
+   
+    return collisionDetect;
+/**/}        
+
+//Debugging:
+this.path = function(obj){ //Enemy 'or' NPC movement;
+    let xP = obj.xPos();
+    let yP = obj.yPos();
+    
+    if(collisionDetect){
+        source = "inf_left.png";
+        setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+        x += 0;
+        y += 0;
+    }
+    
+    x -= 1;
+    y += 0;
+}
+        
+        
+        function move(){
+            updateFrame();
+            ctx.drawImage(sprite, srcX, srcY, f_Width, f_Height, x/*determines x_axis mov.*/, y/*determines y_axis mov.*/, width, height/*, x_Dir, y_Dir*/);
+            
+            
+//Player control(s):
+            if (ctrl && gameArea.keys && gameArea.keys[37]) {
+//Enter 'Left-Arrow: [37]' for horizontal-flip.
+    //allocate sprite (left-facing).
+                
+                sprite.src = "inf_left.png";
+                var img = sprite.src;
+                
+                withdraw = true;
+                attack = false;
+                shield_Up = false;
+                shield_Down = false;
+                
+                document.getElementById("userlog").innerHTML = "Retreat!";
+                x-= 1.5;
+                
+                /*do {
+                    x -= 1.3;
+                    y += gravity;
+                } while (withdraw = true);*/
+                
+                
+                
+                if(withdraw && gameArea.release && gameArea.release[37]){
+                    sprite.scr = "inf_right.png";
+                    withdraw = false;
+                    //document.getElementById("userlog").innerHTML = "Resume..."; //setInterval(gameArea.stop,window.requestAnimationFrame(gameArea.stop)*FPS);
+                }
+                
+                setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+
+            } 
+            
+            if (ctrl && gameArea.keys && gameArea.keys[38]) {
+                sprite.src = "inf_defUp.png";
+                //withdraw = false;
+                attack = false;
+                shield_Up = true;
+                shield_Down = false;
+                setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+            }
+            
+            if (ctrl && gameArea.keys && gameArea.keys[40]) {
+                sprite.src = "inf_defDown.png";
+                //withdraw = false;
+                attack = false;
+                shield_Up = false;
+                shield_Down = true;
+                setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+            }
+            
+            if (ctrl && gameArea.keys && gameArea.keys[39]) {
+//Enter 'Right-Arrow: [39]' for horizontal-flip.
+    //allocate sprite (right-facing).
+                sprite.src = "inf_right.png";
+                withdraw = false;
+                attack = false;
+                shield_Up = false;
+                shield_Down = false;
+                setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+            } 
+            
+            if (ctrl && gameArea.keys && gameArea.keys[32]) {    
+//Enter 'Spacebar: [32]' for attack.
+                sprite.src = "inf_atkR.png";
+                //withdraw = false;
+                attack = true;
+                //shield_Up = false;
+                //shield_Down = false;
+                setInterval(updateFrame, window.requestAnimationFrame(gameArea.stop)*FPS);
+                
+            };
+            
+            
+//Movement(Keys) - *W:[87] *A:[65] *S:[83] *D:[68]            
+            collision(gameObject);
+            
+            
+            if (formation && gameArea.keys && gameArea.keys[16] || collisionDetect){
+            //Enter 'Shift' to halt(formation = true).    
+                x += 0;
+                y += 0;
+                
+            } else if (ctrl && gameArea.keys && gameArea.keys[65]) { 
+            //Enter 'A' to move left.
+                x -= 1; 
+                y += 0;
+                
+            } else if (ctrl && gameArea.keys && gameArea.keys[68]) {
+            //Enter 'D' to move right.
+                x += 1; 
+                y += 0;
+                
+            } else if (ctrl && gameArea.keys && gameArea.keys[87]) {
+            //Enter 'W' to move down.
+                //collision(pilar);
+                
+                x += 0;
+                y -= 1;
+                
+            } else if (ctrl && gameArea.keys && gameArea.keys[83]) { 
+            //Enter 'S' to move up.
+                
+                x += 0;
+                y += 1;
+                
+            /*} else if (gameArea.keys && gameArea.keys[13]) {
+      //Enter 'ENTER' to fire.  
+      //Set position for projectile:
+        munition.update();
+        munition.newPos();
+        var x_Ctrl = user_Skirmish.xPos(0);// x, y - offset
+        var y_Ctrl = user_Skirmish.yPos(60);
+        munition = new component(0.3, 20, 5, "black", x_Ctrl, y_Ctrl);
+        munition.speed_x = 30;
+        
+      //munition.newTrajectory();*/
+            }
+        }
+        
+        setInterval(move, window.requestAnimationFrame(updateFrame)*FPS);
+        //setInterval(move, FPS);
+        window.requestAnimationFrame(move); 
+        
+    }
+
+    this.newPos = function() {
+        this.x += this.speed_x;
+        this.y += this.speed_y;
+    }
+    
+    this.xPos = function(offset) {
+        this.offset = 0;
+        this.x += this.speed_x;
+        return x + offset;
+    }
+    
+    this.yPos = function(offset) {
+        this.offset = 0;
+        this.y += this.speed_y;
+        return y + offset;
+    }
+    
+    this.xPos = function() {
+        this.x = x
+        return x;
+    }
+    
+    this.yPos = function() {
+        this.y = y;
+        return y;
+    }
+    
+
+}
+
+
+
+function updateGameArea() {
+    gameArea.clear();
+    
+    
+    
+    platform.update(gameObject);
+    platform.newPos();
+ 
+    
+    user_Fr.animate("inf_right.png", true, false);
+    user_Skr.animate("inf_right.png", true, true);
+    
+    var i;
+    for(i = 0;i < gameComponent.length; i++){
+        gameComponent[i].animate("inf_left.png", false, false);
+        
+        gameComponent[i].path(gameComponent[i]);
+        
+        user_Fr.coll_detectObj(user_Fr, gameComponent[i]);
+        user_Skr.coll_detectObj(user_Skr, gameComponent[i]);
+        
+        gameComponent[i].coll_detectObj(gameComponent[i], gameComponent[0]);
+        gameComponent[i].coll_detectObj(gameComponent[i], gameComponent[1]);
+        gameComponent[i].coll_detectObj(gameComponent[i], gameComponent[2]);
+        gameComponent[i].coll_detectObj(gameComponent[i], gameComponent[3]);
+        
+        gameComponent[i].coll_detectObj(gameComponent[i], user_Fr);
+        gameComponent[i].coll_detectObj(gameComponent[i], user_Skr);
+    }
+    
+    /*
+    enemy_Fr.animate("inf_left.png", false, false);
+    enemy_Fr1.animate("inf_left.png", false, false);
+    enemy_Fr2.animate("inf_left.png", false, false);
+    enemy_Fr3.animate("inf_left.png", false, false);
+    */
+    
+    //user_Fr.coll_detectObj(user_Fr, gameComponent);
+    user_Fr.coll_detectObj(user_Fr, user_Skr);
+    
+    //user_Skr.coll_detectObj(user_Skr, gameComponent);    
+    user_Skr.coll_detectObj(user_Skr, user_Fr);
+    
+    if (gameArea.keys && gameArea.keys[16]) {
+        //user_Skr.shiftkey();
+    }
+    
+    if (gameArea.keys && gameArea.keys[13]) {
+      //Enter 'ENTER' to fire.  
+      //Set position for projectile:
+        var x_Ctrl = user_Skr.xPos(0);// x, y - offset
+        var y_Ctrl = user_Skr.yPos(60);
+        munition = new component(0.3, 20, 5, "black", x_Ctrl, y_Ctrl);
+        munition.speed_x = 30;
+        //munition.newTrajectory();
+        
+        
+      //munition.newTrajectory();
+    }
+}
+</script>
